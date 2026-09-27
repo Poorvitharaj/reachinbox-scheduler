@@ -1,8 +1,8 @@
 import {
-  ChangeEvent,
   useEffect,
   useState,
 } from "react";
+import type { ChangeEvent } from "react";
 
 import "./App.css";
 
