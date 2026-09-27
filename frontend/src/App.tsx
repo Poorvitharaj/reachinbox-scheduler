@@ -159,7 +159,7 @@ function App() {
   async function checkAuthentication() {
     try {
       const response = await fetch(
-        "http://localhost:4000/api/auth/me",
+        "https://reachinbox-scheduler-17iv.onrender.com/api/auth/me",
         {
           credentials: "include",
         }
@@ -200,7 +200,7 @@ function App() {
 
     try {
       const response = await fetch(
-        "http://localhost:4000/api/emails/scheduled",
+        "https://reachinbox-scheduler-17iv.onrender.com0/api/emails/scheduled",
         {
           credentials: "include",
         }
@@ -232,7 +232,7 @@ function App() {
 
     try {
       const response = await fetch(
-        "http://localhost:4000/api/emails/sent",
+        "https://reachinbox-scheduler-17iv.onrender.com0/api/emails/sent",
         {
           credentials: "include",
         }
@@ -264,7 +264,7 @@ function App() {
 
     try {
       const response = await fetch(
-        "http://localhost:4000/api/emails/failed",
+        "https://reachinbox-scheduler-17iv.onrender.com0/api/emails/failed",
         {
           credentials: "include",
         }
@@ -296,7 +296,7 @@ function App() {
 
     try {
       const response = await fetch(
-        "http://localhost:4000/api/slack/status",
+        "https://reachinbox-scheduler-17iv.onrender.com0/api/slack/status",
         {
           credentials: "include",
         }
@@ -328,12 +328,12 @@ function App() {
 
   function connectSlack() {
     window.location.href =
-      "http://localhost:4000/api/slack/connect";
+      "https://reachinbox-scheduler-17iv.onrender.com0/api/slack/connect";
   }
 
   function logout() {
     window.location.href =
-      "http://localhost:4000/api/auth/logout";
+      "https://reachinbox-scheduler-17iv.onrender.com0/api/auth/logout";
   }
 
   function addRecipient() {
@@ -405,7 +405,7 @@ function App() {
     try {
       const response =
         await fetch(
-          "http://localhost:4000/api/upload/recipients",
+          "https://reachinbox-scheduler-17iv.onrender.com0/api/upload/recipients",
           {
             method: "POST",
             body: formData,
@@ -518,7 +518,7 @@ function App() {
     try {
       const response =
         await fetch(
-          "http://localhost:4000/api/emails/schedule",
+          "https://reachinbox-scheduler-17iv.onrender.com0/api/emails/schedule",
           {
             method: "POST",
             headers: {
@@ -595,7 +595,7 @@ function App() {
     try {
       const response =
         await fetch(
-          `http://localhost:4000/api/emails/search?q=${encodeURIComponent(
+          `https://reachinbox-scheduler-17iv.onrender.com0/api/emails/search?q=${encodeURIComponent(
             query
           )}`,
           {
@@ -685,7 +685,7 @@ function App() {
 
           <a
             className="google-login-button"
-            href="http://localhost:4000/api/auth/google"
+            href="https://reachinbox-scheduler-17iv.onrender.com0/api/auth/google"
           >
             <span className="google-icon">
               G
@@ -857,7 +857,7 @@ function App() {
 
             <a
               className="nav-item"
-              href="http://localhost:4000/admin/queues"
+              href="https://reachinbox-scheduler-17iv.onrender.com0/admin/queues"
               target="_blank"
               rel="noreferrer"
             >
