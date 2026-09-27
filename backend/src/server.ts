@@ -36,15 +36,34 @@ dotenv.config();
 
 const app = express();
 
+/* =========================
+   CORS
+========================= */
+
 app.use(
   cors({
     origin:
+      process.env.FRONTEND_URL ||
       "http://localhost:5173",
     credentials: true,
   })
 );
 
+/* =========================
+   JSON
+========================= */
+
 app.use(express.json());
+
+/* =========================
+   TRUST PROXY
+========================= */
+
+app.set("trust proxy", 1);
+
+/* =========================
+   SESSION
+========================= */
 
 app.use(
   session({
@@ -58,15 +77,26 @@ app.use(
 
     cookie: {
       httpOnly: true,
-      secure: false,
+
+      secure:
+        process.env.NODE_ENV === "production",
+
       maxAge:
         24 * 60 * 60 * 1000,
     },
   })
 );
 
+/* =========================
+   PASSPORT
+========================= */
+
 app.use(passport.initialize());
 app.use(passport.session());
+
+/* =========================
+   HEALTH CHECK
+========================= */
 
 app.get(
   "/api/health",
@@ -78,6 +108,10 @@ app.get(
     });
   }
 );
+
+/* =========================
+   ROUTES
+========================= */
 
 app.use(
   "/api/auth",
@@ -98,6 +132,10 @@ app.use(
   "/api/slack",
   slackRoutes
 );
+
+/* =========================
+   BULL BOARD
+========================= */
 
 const serverAdapter =
   new ExpressAdapter();
@@ -120,8 +158,15 @@ app.use(
   serverAdapter.getRouter()
 );
 
-const PORT =
-  process.env.PORT || 4000;
+/* =========================
+   PORT
+========================= */
+
+const PORT = Number(process.env.PORT) || 4000;
+
+/* =========================
+   START SERVER
+========================= */
 
 async function startServer() {
   try {
@@ -131,21 +176,22 @@ async function startServer() {
 
     app.listen(
       PORT,
+      "0.0.0.0",
       () => {
         console.log(
-          `🚀 Server running on http://localhost:${PORT}`
+          `🚀 Server running on port ${PORT}`
         );
 
         console.log(
-          `📊 Bull Board: http://localhost:${PORT}/admin/queues`
+          `📊 Bull Board available at /admin/queues`
         );
 
         console.log(
-          `🔐 Google Login: http://localhost:4000/api/auth/google`
+          `🔐 Google Login available at /api/auth/google`
         );
 
         console.log(
-          `💬 Slack Connect: http://localhost:4000/api/slack/connect`
+          `💬 Slack Connect available at /api/slack/connect`
         );
       }
     );
