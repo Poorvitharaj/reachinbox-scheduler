@@ -19,71 +19,147 @@ const DEFAULT_HOURLY_LIMIT =
 const DEFAULT_DELAY_MS =
   Number(process.env.DEFAULT_DELAY_MS) || 2000;
 
+/**
+ * Creates a Redis key representing the current UTC hour.
+ *
+ * Example:
+ * email-rate-limit:2026-09-27-08
+ */
 function getHourlyRateLimitKey() {
   const now = new Date();
 
   const year = now.getUTCFullYear();
-  const month = String(now.getUTCMonth() + 1).padStart(2, "0");
-  const day = String(now.getUTCDate()).padStart(2, "0");
-  const hour = String(now.getUTCHours()).padStart(2, "0");
+
+  const month = String(
+    now.getUTCMonth() + 1
+  ).padStart(2, "0");
+
+  const day = String(
+    now.getUTCDate()
+  ).padStart(2, "0");
+
+  const hour = String(
+    now.getUTCHours()
+  ).padStart(2, "0");
 
   return `email-rate-limit:${year}-${month}-${day}-${hour}`;
 }
 
-function getSlackNotificationKey(userId: string) {
+/**
+ * Creates a Redis key used to make sure we don't
+ * repeatedly send the same Slack rate-limit notification
+ * during the same hour.
+ */
+function getSlackNotificationKey(
+  userId: string
+) {
   const now = new Date();
 
   const year = now.getUTCFullYear();
-  const month = String(now.getUTCMonth() + 1).padStart(2, "0");
-  const day = String(now.getUTCDate()).padStart(2, "0");
-  const hour = String(now.getUTCHours()).padStart(2, "0");
+
+  const month = String(
+    now.getUTCMonth() + 1
+  ).padStart(2, "0");
+
+  const day = String(
+    now.getUTCDate()
+  ).padStart(2, "0");
+
+  const hour = String(
+    now.getUTCHours()
+  ).padStart(2, "0");
 
   return `slack-rate-limit-notified:${userId}:${year}-${month}-${day}-${hour}`;
 }
 
-async function checkHourlyLimit(hourlyLimit: number) {
-  const key = getHourlyRateLimitKey();
+/**
+ * Checks whether another email can be sent
+ * within the configured hourly limit.
+ */
+async function checkHourlyLimit(
+  hourlyLimit: number
+) {
+  const key =
+    getHourlyRateLimitKey();
 
-  const count = await redisConnection.incr(key);
+  const count =
+    await redisConnection.incr(key);
 
   if (count === 1) {
-    await redisConnection.expire(key, 3700);
+    await redisConnection.expire(
+      key,
+      3700
+    );
   }
 
   if (count > hourlyLimit) {
-    await redisConnection.decr(key);
+    await redisConnection.decr(
+      key
+    );
+
     return false;
   }
 
   return true;
 }
 
+/**
+ * Calculates the delay until the beginning
+ * of the next UTC hour.
+ */
 function getDelayUntilNextHour() {
   const now = new Date();
-  const nextHour = new Date(now);
 
-  nextHour.setUTCMinutes(0, 0, 0);
-  nextHour.setUTCHours(nextHour.getUTCHours() + 1);
+  const nextHour =
+    new Date(now);
 
-  return Math.max(1000, nextHour.getTime() - now.getTime());
+  nextHour.setUTCMinutes(
+    0,
+    0,
+    0
+  );
+
+  nextHour.setUTCHours(
+    nextHour.getUTCHours() + 1
+  );
+
+  return Math.max(
+    1000,
+    nextHour.getTime() -
+      now.getTime()
+  );
 }
 
+/**
+ * Sends a Slack notification when the hourly
+ * email rate limit has been reached.
+ *
+ * Only one notification is sent per user
+ * per UTC hour.
+ */
 async function notifySlackRateLimit(
   userId: string,
   hourlyLimit: number
 ) {
   try {
-    const notificationKey = getSlackNotificationKey(userId);
+    const notificationKey =
+      getSlackNotificationKey(
+        userId
+      );
 
-    const notificationCreated = await redisConnection.set(
-      notificationKey,
-      "1",
-      "EX",
-      3700,
-      "NX"
-    );
+    const notificationCreated =
+      await redisConnection.set(
+        notificationKey,
+        "1",
+        "EX",
+        3700,
+        "NX"
+      );
 
-    if (notificationCreated !== "OK") {
+    if (
+      notificationCreated !==
+      "OK"
+    ) {
       return;
     }
 
@@ -93,7 +169,10 @@ async function notifySlackRateLimit(
       `Additional emails have been rescheduled for the next hour.\n\n` +
       `Time: ${new Date().toISOString()}`;
 
-    await sendSlackNotification(userId, message);
+    await sendSlackNotification(
+      userId,
+      message
+    );
   } catch (error) {
     console.error(
       "❌ Slack rate-limit notification failed:",
@@ -102,9 +181,21 @@ async function notifySlackRateLimit(
   }
 }
 
-async function processEmail(job: Job) {
-  console.log("📨 Processing email job:", job.id);
-  console.log("Email data:", job.data);
+/**
+ * Processes one email job from BullMQ.
+ */
+async function processEmail(
+  job: Job
+) {
+  console.log(
+    "📨 Processing email job:",
+    job.id
+  );
+
+  console.log(
+    "Email data:",
+    job.data
+  );
 
   const {
     emailId,
@@ -117,11 +208,33 @@ async function processEmail(job: Job) {
     delayBetweenEmails,
   } = job.data;
 
+  /**
+   * Only use the default hourly limit when
+   * the job did not provide one.
+   */
   const configuredHourlyLimit =
-    hourlyLimit === undefined || hourlyLimit === null
+    hourlyLimit === undefined ||
+    hourlyLimit === null
       ? DEFAULT_HOURLY_LIMIT
       : Number(hourlyLimit);
 
+  /**
+   * IMPORTANT:
+   *
+   * Do NOT use:
+   *
+   * Number(delayBetweenEmails) || DEFAULT_DELAY_MS
+   *
+   * because 0 is a valid delay value and
+   * JavaScript treats 0 as false.
+   *
+   * With this implementation:
+   *
+   * undefined/null → default 2000ms
+   * 0              → 0ms
+   * 1000           → 1000ms
+   * 5000           → 5000ms
+   */
   const configuredDelay =
     delayBetweenEmails === undefined ||
     delayBetweenEmails === null
@@ -129,34 +242,58 @@ async function processEmail(job: Job) {
       : Number(delayBetweenEmails);
 
   try {
-    const existingEmail = await pool.query(
-      `
-      SELECT status
-      FROM emails
-      WHERE id = $1
-      `,
-      [emailId]
-    );
+    /**
+     * Check that the email still exists
+     * in PostgreSQL.
+     */
+    const existingEmail =
+      await pool.query(
+        `
+        SELECT status
+        FROM emails
+        WHERE id = $1
+        `,
+        [emailId]
+      );
 
-    if (existingEmail.rows.length === 0) {
+    if (
+      existingEmail.rows.length ===
+      0
+    ) {
       console.log(
         "⚠️ Email record not found:",
         emailId
       );
+
       return;
     }
 
-    if (existingEmail.rows[0].status === "SENT") {
+    /**
+     * Idempotency protection.
+     *
+     * If the email was already sent,
+     * don't send it again.
+     */
+    if (
+      existingEmail.rows[0]
+        .status === "SENT"
+    ) {
       console.log(
         "♻️ Email already sent. Skipping duplicate:",
         emailId
       );
+
       return;
     }
 
-    const allowed = await checkHourlyLimit(
-      configuredHourlyLimit
-    );
+    /**
+     * Check the hourly rate limit
+     * before sending.
+     */
+    const allowed =
+      await checkHourlyLimit(
+        configuredHourlyLimit
+      );
 
     if (!allowed) {
       const delayUntilNextHour =
@@ -168,10 +305,17 @@ async function processEmail(job: Job) {
 
       console.log(
         `⏳ Rescheduling ${emailId} for approximately ${
-          Math.ceil(delayUntilNextHour / 1000)
+          Math.ceil(
+            delayUntilNextHour /
+              1000
+          )
         } seconds later.`
       );
 
+      /**
+       * Notify Slack once per user
+       * during the current hour.
+       */
       if (userId) {
         await notifySlackRateLimit(
           userId,
@@ -179,17 +323,26 @@ async function processEmail(job: Job) {
         );
       }
 
+      /**
+       * Re-add the email to BullMQ
+       * for the next hour.
+       */
       await emailQueue.add(
         "send-email",
         job.data,
         {
           jobId: `${emailId}-retry-${Date.now()}`,
-          delay: delayUntilNextHour,
+          delay:
+            delayUntilNextHour,
           removeOnComplete: false,
           removeOnFail: false,
         }
       );
 
+      /**
+       * Keep the email in the
+       * scheduled state.
+       */
       await pool.query(
         `
         UPDATE emails
@@ -204,6 +357,9 @@ async function processEmail(job: Job) {
       return;
     }
 
+    /**
+     * Mark email as currently being sent.
+     */
     await pool.query(
       `
       UPDATE emails
@@ -215,25 +371,53 @@ async function processEmail(job: Job) {
       [emailId]
     );
 
-    if (configuredDelay > 0) {
+    /**
+     * Apply the configured delay.
+     *
+     * A delay of 0 means:
+     *
+     * configuredDelay = 0
+     *
+     * and therefore no artificial wait.
+     */
+    if (
+      configuredDelay > 0
+    ) {
       console.log(
         `⏱️ Waiting ${configuredDelay}ms before sending ${emailId}`
       );
 
-      await new Promise<void>((resolve) =>
-        setTimeout(resolve, configuredDelay)
+      await new Promise<void>(
+        (resolve) =>
+          setTimeout(
+            resolve,
+            configuredDelay
+          )
+      );
+    } else {
+      console.log(
+        `⚡ No delay configured for ${emailId}`
       );
     }
 
-    const result = await sendEmail(
-      senderEmail,
-      recipient,
-      subject,
-      body
-    );
+    /**
+     * Send the actual email through
+     * Ethereal SMTP.
+     */
+    const result =
+      await sendEmail(
+        senderEmail,
+        recipient,
+        subject,
+        body
+      );
 
-    const sentAt = new Date();
+    const sentAt =
+      new Date();
 
+    /**
+     * Persist SENT status in PostgreSQL.
+     */
     await pool.query(
       `
       UPDATE emails
@@ -244,9 +428,16 @@ async function processEmail(job: Job) {
         failure_reason = NULL
       WHERE id = $1
       `,
-      [emailId, sentAt]
+      [
+        emailId,
+        sentAt,
+      ]
     );
 
+    /**
+     * Synchronize the status with
+     * Elasticsearch.
+     */
     await updateEmailStatus(
       emailId,
       "SENT",
@@ -258,7 +449,13 @@ async function processEmail(job: Job) {
       emailId
     );
 
-    if (result.previewUrl) {
+    /**
+     * Display the Ethereal preview URL
+     * when available.
+     */
+    if (
+      result.previewUrl
+    ) {
       console.log(
         "🔗 Preview URL:",
         result.previewUrl
@@ -277,6 +474,9 @@ async function processEmail(job: Job) {
         ? error.message
         : "Unknown email sending error";
 
+    /**
+     * Persist FAILED status in PostgreSQL.
+     */
     await pool.query(
       `
       UPDATE emails
@@ -286,39 +486,69 @@ async function processEmail(job: Job) {
         updated_at = CURRENT_TIMESTAMP
       WHERE id = $1
       `,
-      [emailId, errorMessage]
+      [
+        emailId,
+        errorMessage,
+      ]
     );
 
+    /**
+     * Synchronize FAILED status
+     * with Elasticsearch.
+     */
     await updateEmailStatus(
       emailId,
       "FAILED"
     );
 
+    /**
+     * Re-throw the error so BullMQ
+     * records the job as failed.
+     */
     throw error;
   }
 }
 
-const worker = new Worker(
-  "emailQueue",
-  processEmail,
-  {
-    connection: redisConnection,
-    concurrency: WORKER_CONCURRENCY,
+/**
+ * BullMQ email worker.
+ */
+const worker =
+  new Worker(
+    "emailQueue",
+    processEmail,
+    {
+      connection:
+        redisConnection,
+
+      concurrency:
+        WORKER_CONCURRENCY,
+    }
+  );
+
+/**
+ * Worker completed event.
+ */
+worker.on(
+  "completed",
+  (job) => {
+    console.log(
+      `✅ Job ${job.id} completed`
+    );
   }
 );
 
-worker.on("completed", (job) => {
-  console.log(
-    `✅ Job ${job.id} completed`
-  );
-});
-
-worker.on("failed", (job, error) => {
-  console.error(
-    `❌ Job ${job?.id} failed:`,
-    error
-  );
-});
+/**
+ * Worker failed event.
+ */
+worker.on(
+  "failed",
+  (job, error) => {
+    console.error(
+      `❌ Job ${job?.id} failed:`,
+      error
+    );
+  }
+);
 
 console.log(
   `👷 Email worker started with concurrency ${WORKER_CONCURRENCY}`
