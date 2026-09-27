@@ -136,6 +136,8 @@ reachinbox-scheduler/
 ├── docker-compose.yml
 ├── .gitignore
 └── README.md
+```
+
 ## Prerequisites
 
 Make sure the following are installed:
@@ -161,6 +163,8 @@ Create the backend environment file:
 
 ```text
 backend/.env
+```
+
 Use `backend/.env.example` as the template.
 
 Example:
@@ -209,7 +213,7 @@ docker ps
 
 ## Backend Setup
 
-Open a terminal:
+Open a terminal and run:
 
 ```bash
 cd backend
@@ -230,7 +234,7 @@ http://localhost:4000
 
 ## Start the Email Worker
 
-Open a second terminal:
+Open another terminal and run:
 
 ```bash
 cd backend
@@ -241,7 +245,7 @@ The worker processes scheduled emails from the BullMQ queue.
 
 ## Frontend Setup
 
-Open a third terminal:
+Open another terminal and run:
 
 ```bash
 cd frontend
@@ -280,13 +284,15 @@ Configure a Google OAuth application with the callback URL:
 http://localhost:4000/api/auth/google/callback
 ```
 
-Set:
+Set the following environment variables:
 
 ```env
 GOOGLE_CLIENT_ID=your_google_client_id
 GOOGLE_CLIENT_SECRET=your_google_client_secret
 GOOGLE_CALLBACK_URL=http://localhost:4000/api/auth/google/callback
 ```
+
+After authentication, the user is redirected back to the frontend.
 
 ## Slack OAuth Setup
 
@@ -296,7 +302,7 @@ Configure the Slack application with the redirect URL:
 http://localhost:4000/api/slack/callback
 ```
 
-Set:
+Set the following environment variables:
 
 ```env
 SLACK_CLIENT_ID=your_slack_client_id
